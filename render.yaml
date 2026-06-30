@@ -9,5 +9,7 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: YOUTUBE_DL_SKIP_PYTHON_CHECK
+        value: "1"
       - key: PORT
         value: 3001
