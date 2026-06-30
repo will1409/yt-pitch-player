@@ -1,14 +1,12 @@
 /**
- * AudioEngine — Tone.Player + Tone.PitchShift (phase vocoder real).
+ * AudioEngine — HTML5 Audio + Tone.PitchShift
  *
  * Pipeline de áudio:
- *   Backend /api/audio/:id (proxy YouTube)
- *     └─> Tone.Player (AudioBuffer na memória)
- *         └─> Tone.PitchShift  ← pitch muda aqui em tempo real
- *             └─> AudioContext.destination (saída)
- *
- * YouTube roda mutado — apenas visual.
- * A mudança de pitch é instantânea e não interrompe a reprodução.
+ *   Backend /api/audio/:id (proxy YouTube com chunked streaming)
+ *     └─> HTMLAudioElement (crossOrigin="anonymous")
+ *         └─> MediaElementAudioSourceNode
+ *             └─> Tone.PitchShift (mudança de pitch em tempo real)
+ *                 └─> AudioContext.destination (saída)
  */
 
 import * as Tone from 'tone';
@@ -16,16 +14,15 @@ import type { AudioEngineConfig } from '../types';
 
 export type EngineStatus = 'idle' | 'loading' | 'ready' | 'error';
 
-// Em produção, aponta para o backend no Railway (configurado em .env.production)
-// Em desenvolvimento local, usa proxy do Vite (/api → localhost:3001)
 const AUDIO_API_BASE = (import.meta.env.VITE_API_URL as string) || '/api/audio';
-const BASE_FREQ = 440; // A4 — referência para o tom de teste
+const BASE_FREQ = 440;
 
 export class AudioEngine {
-  private tonePlayer: Tone.Player | null = null;
+  private audioEl: HTMLAudioElement | null = null;
+  private sourceNode: MediaElementAudioSourceNode | null = null;
   private pitchShift: Tone.PitchShift | null = null;
 
-  // Tom de teste (oscilador independente)
+  // Tom de teste
   private oscillator: OscillatorNode | null = null;
   private gainNode: GainNode | null = null;
   private _testTonePlaying = false;
@@ -44,10 +41,6 @@ export class AudioEngine {
     this._onStatusChange?.(s);
   }
 
-  /**
-   * Baixa o áudio do backend e prepara o pipeline de pitch shifting.
-   * Tone.Player faz download do AudioBuffer — conexão 100% dentro do Tone.js.
-   */
   async loadVideo(videoId: string): Promise<void> {
     if (videoId === this._videoId && this._status === 'ready') return;
 
@@ -57,60 +50,64 @@ export class AudioEngine {
     try {
       await Tone.start();
 
-      // PitchShift conectado direto à saída
       this.pitchShift = new Tone.PitchShift(this._pitch);
+      this.pitchShift.windowSize = 0.1; // Suaviza artefatos
       this.pitchShift.toDestination();
 
-      // Player conectado ao PitchShift — pipeline puro Tone.js (sem problemas de conexão)
-      this.tonePlayer = new Tone.Player();
-      this.tonePlayer.connect(this.pitchShift);
+      this.audioEl = new Audio(`${AUDIO_API_BASE}/${videoId}?t=${Date.now()}`);
+      this.audioEl.crossOrigin = 'anonymous'; // Essencial para Web Audio API processar o stream
 
-      // Baixa o áudio do proxy backend
-      await this.tonePlayer.load(`${AUDIO_API_BASE}/${videoId}`);
+      const ctx = (Tone.context.rawContext || Tone.getContext().rawContext) as AudioContext;
+      this.sourceNode = ctx.createMediaElementSource(this.audioEl);
+      
+      // Conecta o nó nativo ao nó do Tone.js
+      Tone.connect(this.sourceNode, this.pitchShift);
+
+      // Aguarda o áudio começar a bufferizar (streaming) em vez de baixar tudo
+      await new Promise<void>((resolve, reject) => {
+        if (!this.audioEl) return reject(new Error('Audio element destroyed'));
+        
+        this.audioEl.oncanplay = () => {
+          this.setStatus('ready');
+          resolve();
+        };
+        this.audioEl.onerror = (e) => reject(e);
+      });
 
       this._videoId = videoId;
-      this.setStatus('ready');
     } catch (err) {
       console.error('[AudioEngine] loadVideo falhou:', err);
       this.setStatus('error');
     }
   }
 
-  /**
-   * Inicia reprodução a partir de `syncTime` (em segundos).
-   * Chamado sempre que o YouTube começa a tocar.
-   */
   async play(syncTime = 0): Promise<void> {
-    if (this._status !== 'ready' || !this.tonePlayer) return;
+    if (this._status !== 'ready' || !this.audioEl) return;
     await Tone.start();
 
-    if (this.tonePlayer.state === 'started') {
-      this.tonePlayer.stop();
+    // Sincroniza o tempo com o YouTube
+    this.audioEl.currentTime = syncTime;
+    
+    try {
+      await this.audioEl.play();
+    } catch (err) {
+      console.error('[AudioEngine] Play failed:', err);
     }
-
-    // `start(time, offset)` — inicia imediatamente no ponto sincronizado
-    this.tonePlayer.start(Tone.now(), syncTime);
   }
 
-  /** Para a reprodução (chamado ao pausar o YouTube). */
   pause(): void {
-    if (this.tonePlayer?.state === 'started') {
-      this.tonePlayer.stop();
+    if (this.audioEl && !this.audioEl.paused) {
+      this.audioEl.pause();
     }
   }
 
-  /**
-   * Define o pitch em semitons (-12 a +12).
-   * Muda instantaneamente sem interromper o áudio.
-   */
   setPitch(semitones: number): void {
     this._pitch = semitones;
 
     if (this.pitchShift) {
-      this.pitchShift.pitch = semitones; // ← mudança em tempo real
+      this.pitchShift.pitch = semitones;
     }
 
-    // Atualiza o oscilador de teste, se ativo
     if (this._testTonePlaying && this.oscillator) {
       const ctx = Tone.getContext().rawContext as AudioContext;
       const freq = BASE_FREQ * Math.pow(2, semitones / 12);
@@ -121,8 +118,6 @@ export class AudioEngine {
   getPitch(): number { return this._pitch; }
   getStatus(): EngineStatus { return this._status; }
   reset(): void { this.setPitch(0); }
-
-  // ── Tom de teste ──────────────────────────────────────────────────────────
 
   async startTestTone(): Promise<void> {
     if (this._testTonePlaying) return;
@@ -156,7 +151,7 @@ export class AudioEngine {
     const osc = this.oscillator;
     const gain = this.gainNode;
     setTimeout(() => {
-      try { osc.stop(); osc.disconnect(); gain.disconnect(); } catch { /* já parado */ }
+      try { osc.stop(); osc.disconnect(); gain.disconnect(); } catch { /* ignorado */ }
     }, 150);
 
     this.oscillator = null;
@@ -166,13 +161,16 @@ export class AudioEngine {
 
   isTestTonePlaying(): boolean { return this._testTonePlaying; }
 
-  // ── Limpeza ───────────────────────────────────────────────────────────────
-
   private async cleanupAudio(): Promise<void> {
-    if (this.tonePlayer) {
-      try { this.tonePlayer.stop(); } catch { /* ignorado */ }
-      try { this.tonePlayer.disconnect(); this.tonePlayer.dispose(); } catch { /* ignorado */ }
-      this.tonePlayer = null;
+    if (this.audioEl) {
+      this.audioEl.pause();
+      this.audioEl.removeAttribute('src');
+      this.audioEl.load();
+      this.audioEl = null;
+    }
+    if (this.sourceNode) {
+      try { this.sourceNode.disconnect(); } catch { /* ignorado */ }
+      this.sourceNode = null;
     }
     if (this.pitchShift) {
       try { this.pitchShift.disconnect(); this.pitchShift.dispose(); } catch { /* ignorado */ }
