@@ -13,7 +13,7 @@ router.get('/:videoId', async (req: Request, res: Response): Promise<void> => {
       format: 'bestaudio',
       noWarnings: true,
       callHome: false,
-      noCheckCertificate: true,
+      noCheckCertificates: true,
       youtubeSkipDashManifest: true,
     });
 
