@@ -1,48 +1,42 @@
 import { Router, Request, Response } from 'express';
-import ytdl from '@distube/ytdl-core';
+import youtubedl from 'youtube-dl-exec';
 
 const router = Router();
 
-/**
- * GET /api/audio/:videoId
- * Faz proxy do stream de áudio do YouTube para o cliente.
- * Necessário porque o YouTube bloqueia acesso direto ao áudio via CORS no browser.
- */
 router.get('/:videoId', async (req: Request, res: Response): Promise<void> => {
   const { videoId } = req.params;
-
-  if (!ytdl.validateID(videoId)) {
-    res.status(400).json({ error: 'ID de vídeo inválido.' });
-    return;
-  }
+  const url = `https://www.youtube.com/watch?v=${videoId}`;
 
   try {
-    const stream = ytdl(videoId, {
-      filter: 'audioonly',
-      quality: 'lowestaudio',
+    const subprocess = youtubedl.exec(url, {
+      output: '-',
+      format: 'bestaudio',
+      noWarnings: true,
+      noCallHome: true,
+      noCheckCertificate: true,
+      youtubeSkipDashManifest: true,
     });
 
-    stream.on('info', (_info, format) => {
-      const mimeType = format.mimeType?.split(';')[0] ?? 'audio/webm';
-      res.setHeader('Content-Type', mimeType);
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Transfer-Encoding', 'chunked');
-      // Essencial para o crossOrigin="anonymous" do MediaElementAudioSourceNode
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    });
+    res.setHeader('Content-Type', 'audio/webm');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Transfer-Encoding', 'chunked');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
 
-    stream.on('error', (err: Error) => {
-      console.error('[AudioRoute] Erro no stream:', err.message);
+    subprocess.stdout?.on('error', (err: Error) => {
+      console.error('[AudioRoute] Erro no stream do yt-dlp:', err.message);
       if (!res.headersSent) {
-        res.status(500).json({ error: 'Falha ao carregar áudio do vídeo.' });
+        res.status(500).json({ error: 'Falha ao carregar áudio.' });
       }
     });
 
-    // Cancela o stream se o cliente fechar a conexão
-    req.on('close', () => stream.destroy());
+    req.on('close', () => {
+      if (subprocess.pid) {
+        process.kill(subprocess.pid);
+      }
+    });
 
-    stream.pipe(res);
+    subprocess.stdout?.pipe(res);
   } catch (err) {
     console.error('[AudioRoute] Erro:', err);
     if (!res.headersSent) {
