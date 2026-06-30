@@ -27,6 +27,9 @@ router.get('/:videoId', async (req: Request, res: Response): Promise<void> => {
       res.setHeader('Content-Type', mimeType);
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Transfer-Encoding', 'chunked');
+      // Essencial para o crossOrigin="anonymous" do MediaElementAudioSourceNode
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     });
 
     stream.on('error', (err: Error) => {
