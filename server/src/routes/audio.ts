@@ -32,7 +32,11 @@ router.get('/:videoId', async (req: Request, res: Response): Promise<void> => {
 
     req.on('close', () => {
       if (subprocess.pid) {
-        process.kill(subprocess.pid);
+        try {
+          process.kill(subprocess.pid);
+        } catch (e) {
+          // Process already exited
+        }
       }
     });
 
