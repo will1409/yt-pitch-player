@@ -7,23 +7,33 @@ const clampPitch = (v: number) => Math.max(MIN_PITCH, Math.min(MAX_PITCH, v));
 
 export const usePlayerStore = create<PlayerStore>((set, get) => ({
   // State
-  videoId: null,
   videoUrl: '',
   pitch: 0,
   isPlaying: false,
-  isLoaded: false,
-  isBuffering: false,
+  
+  // Multitrack State
+  jobId: null,
+  jobStatus: 'idle',
+  vocalsUrl: null,
+  accompanimentUrl: null,
+  vocalsVolume: 1,
+  accompanimentVolume: 1,
+  
   error: null,
 
   // Actions
   setVideoUrl: (url) => set({ videoUrl: url }),
-  setVideoId: (id) => set({ videoId: id, isLoaded: false, error: null }),
   setPitch: (pitch) => set({ pitch: clampPitch(pitch) }),
   incrementPitch: () => set({ pitch: clampPitch(get().pitch + 1) }),
   decrementPitch: () => set({ pitch: clampPitch(get().pitch - 1) }),
   resetPitch: () => set({ pitch: 0 }),
   setIsPlaying: (isPlaying) => set({ isPlaying }),
-  setIsLoaded: (isLoaded) => set({ isLoaded }),
-  setIsBuffering: (isBuffering) => set({ isBuffering }),
+  
+  setJobId: (id) => set({ jobId: id }),
+  setJobStatus: (status) => set({ jobStatus: status }),
+  setStems: (vocals, accompaniment) => set({ vocalsUrl: vocals, accompanimentUrl: accompaniment }),
+  setVocalsVolume: (vol) => set({ vocalsVolume: vol }),
+  setAccompanimentVolume: (vol) => set({ accompanimentVolume: vol }),
+  
   setError: (error) => set({ error }),
 }));

@@ -2,15 +2,15 @@ import React, { useRef } from 'react';
 import { MdLink, MdPlayCircle, MdClear } from 'react-icons/md';
 import { Button } from '../ui/Button';
 import { usePlayerStore } from '../../store/playerStore';
-import { useYoutubePlayer } from '../../hooks/useYoutubePlayer';
+import { useMoisesPipeline } from '../../hooks/useMoisesPipeline';
 
 export const UrlInput: React.FC = () => {
-  const { videoUrl, setVideoUrl, error, setError } = usePlayerStore();
-  const { loadVideo } = useYoutubePlayer();
+  const { videoUrl, setVideoUrl, error, setError, jobStatus } = usePlayerStore();
+  const { startPipeline } = useMoisesPipeline();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') loadVideo();
+    if (e.key === 'Enter') startPipeline();
   };
 
   const handleClear = () => {
@@ -53,13 +53,17 @@ export const UrlInput: React.FC = () => {
         <Button
           variant="primary"
           size="lg"
-          onClick={loadVideo}
-          disabled={!videoUrl.trim()}
+          onClick={startPipeline}
+          disabled={!videoUrl.trim() || jobStatus === 'processing'}
           className="shrink-0 flex items-center gap-2"
         >
           <MdPlayCircle className="text-xl" />
-          <span className="hidden sm:inline">Carregar vídeo</span>
-          <span className="sm:hidden">Carregar</span>
+          <span className="hidden sm:inline">
+            {jobStatus === 'processing' ? 'Processando IA...' : 'Separar Faixas'}
+          </span>
+          <span className="sm:hidden">
+            {jobStatus === 'processing' ? '...' : 'Ir'}
+          </span>
         </Button>
       </div>
 

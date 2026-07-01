@@ -3,7 +3,6 @@ import { MdAdd, MdRemove, MdRefresh, MdVolumeUp, MdVolumeOff } from 'react-icons
 import { PitchGrid } from './PitchGrid';
 import { Button } from '../ui/Button';
 import { usePlayerStore } from '../../store/playerStore';
-import { useAudioEngine } from '../../hooks/useAudioEngine';
 
 function formatPitch(value: number): string {
   if (value > 0) return `+${value}`;
@@ -25,7 +24,6 @@ function getPitchTextColor(value: number): string {
 
 export const PitchControls: React.FC = () => {
   const { pitch, incrementPitch, decrementPitch, resetPitch } = usePlayerStore();
-  const { toggleTestTone, testTonePlaying } = useAudioEngine();
 
   return (
     <div className="w-full max-w-3xl mx-auto flex flex-col gap-6">
@@ -83,25 +81,6 @@ export const PitchControls: React.FC = () => {
             className="w-14 h-14 flex items-center justify-center rounded-2xl bg-white/5 border border-white/10 hover:bg-violet-600/20 hover:border-violet-500/40 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed text-white/70 hover:text-violet-300 transition-all duration-150 text-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
           >
             <MdAdd />
-          </button>
-        </div>
-
-        {/* Botão de tom de teste */}
-        <div className="z-10 w-full flex justify-center">
-          <button
-            onClick={toggleTestTone}
-            className={[
-              'flex items-center gap-2 px-5 py-2.5 rounded-xl border text-sm font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400',
-              testTonePlaying
-                ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-600/30'
-                : 'bg-white/5 border-white/15 text-white/50 hover:bg-white/10 hover:text-white/80',
-            ].join(' ')}
-          >
-            {testTonePlaying ? (
-              <><MdVolumeOff className="text-lg" />Parar Tom de Teste</>
-            ) : (
-              <><MdVolumeUp className="text-lg" />Testar Pitch (Tom de Referência)</>
-            )}
           </button>
         </div>
       </div>
