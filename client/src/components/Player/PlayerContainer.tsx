@@ -4,7 +4,7 @@ import { MultitrackPlayer } from './MultitrackPlayer';
 import { MdPlayCircleFilled, MdAutoAwesome } from 'react-icons/md';
 
 export const PlayerContainer: React.FC = () => {
-  const { videoUrl, jobStatus } = usePlayerStore();
+  const { jobStatus } = usePlayerStore();
 
   return (
     <div className="w-full max-w-3xl mx-auto flex flex-col gap-3">

@@ -1,5 +1,5 @@
 import React from 'react';
-import { MdAdd, MdRemove, MdRefresh, MdVolumeUp, MdVolumeOff } from 'react-icons/md';
+import { MdAdd, MdRemove, MdRefresh } from 'react-icons/md';
 import { PitchGrid } from './PitchGrid';
 import { Button } from '../ui/Button';
 import { usePlayerStore } from '../../store/playerStore';
