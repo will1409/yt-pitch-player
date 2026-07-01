@@ -16,14 +16,7 @@ const ALLOWED_ORIGINS = [
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      // Permite requisições sem origin (ex: curl) e origens autorizadas
-      if (!origin || ALLOWED_ORIGINS.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+    origin: '*', // Permite Vercel e outros domínios
   })
 );
 
