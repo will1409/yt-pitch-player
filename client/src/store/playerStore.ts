@@ -15,9 +15,17 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
   jobId: null,
   jobStatus: 'idle',
   vocalsUrl: null,
-  accompanimentUrl: null,
+  drumsUrl: null,
+  bassUrl: null,
+  otherUrl: null,
+  pianoUrl: null,
+  guitarUrl: null,
   vocalsVolume: 1,
-  accompanimentVolume: 1,
+  drumsVolume: 1,
+  bassVolume: 1,
+  otherVolume: 1,
+  pianoVolume: 1,
+  guitarVolume: 1,
   
   error: null,
 
@@ -31,9 +39,26 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
   
   setJobId: (id) => set({ jobId: id }),
   setJobStatus: (status) => set({ jobStatus: status }),
-  setStems: (vocals, accompaniment) => set({ vocalsUrl: vocals, accompanimentUrl: accompaniment }),
+  setStems: (stems) => {
+    if (!stems) {
+      set({ vocalsUrl: null, drumsUrl: null, bassUrl: null, otherUrl: null, pianoUrl: null, guitarUrl: null });
+    } else {
+      set({ 
+        vocalsUrl: stems.vocals, 
+        drumsUrl: stems.drums, 
+        bassUrl: stems.bass, 
+        otherUrl: stems.other,
+        pianoUrl: stems.piano,
+        guitarUrl: stems.guitar
+      });
+    }
+  },
   setVocalsVolume: (vol) => set({ vocalsVolume: vol }),
-  setAccompanimentVolume: (vol) => set({ accompanimentVolume: vol }),
+  setDrumsVolume: (vol) => set({ drumsVolume: vol }),
+  setBassVolume: (vol) => set({ bassVolume: vol }),
+  setOtherVolume: (vol) => set({ otherVolume: vol }),
+  setPianoVolume: (vol) => set({ pianoVolume: vol }),
+  setGuitarVolume: (vol) => set({ guitarVolume: vol }),
   
   setError: (error) => set({ error }),
 }));

@@ -1,0 +1,1 @@
+import soundfile as sf; import numpy as np; from pedalboard import Pedalboard, PitchShift; audio = np.random.uniform(-1, 1, (12000000, 2)).astype(np.float32); board = Pedalboard([PitchShift(semitones=2)]); effected = board(audio.T, 44100); sf.write('test_pitch_out.wav', effected.T, 44100); print('Shape:', effected.shape)  

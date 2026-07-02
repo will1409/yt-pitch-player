@@ -17,96 +17,102 @@ router.post('/', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'URL is required' });
   }
 
-  const jobId = crypto.randomBytes(8).toString('hex');
-  const pythonDir = path.join(__dirname, '../../python');
-  const processScript = path.join(pythonDir, 'process.py');
+  const numPitch = Number(pitch || 0);
+  const jobId = crypto.createHash('md5').update(url).digest('hex');
   
-  // Caminho absoluto para o executável do python no venv do windows
+  const pythonDir = path.join(__dirname, '../../python');
   const pythonExecutable = path.join(pythonDir, 'venv', 'Scripts', 'python.exe');
-
-  jobs.set(jobId, { status: 'processing', progress: 0 });
-
-  console.log(`[Job ${jobId}] Iniciando processamento de ${url} com pitch ${pitch}...`);
-
-  if (process.env.RUNPOD_API_KEY && process.env.RUNPOD_ENDPOINT_ID) {
-    console.log(`[Job ${jobId}] Enviando para o RunPod Serverless...`);
-    
-    axios.post(`https://api.runpod.ai/v2/${process.env.RUNPOD_ENDPOINT_ID}/runsync`, {
-        input: { url, pitch: pitch || 0 }
-    }, {
-        headers: {
-            'Authorization': `Bearer ${process.env.RUNPOD_API_KEY}`,
-            'Content-Type': 'application/json'
-        },
-        timeout: 120000 // 2 minutos
-    }).then(response => {
-        const result = response.data;
-        if (result.status === 'COMPLETED' && result.output && result.output.status === 'success') {
-            const jobDir = path.join(pythonDir, 'jobs', jobId);
-            fs.mkdirSync(jobDir, { recursive: true });
-            
-            fs.writeFileSync(path.join(jobDir, 'vocals.wav'), Buffer.from(result.output.vocals_base64, 'base64'));
-            fs.writeFileSync(path.join(jobDir, 'accompaniment.wav'), Buffer.from(result.output.accompaniment_base64, 'base64'));
-            
-            jobs.set(jobId, { status: 'success', result: {
-                vocals: `/api/audio/jobs/${jobId}/vocals.wav`,
-                accompaniment: `/api/audio/jobs/${jobId}/accompaniment.wav`
-            }});
-            console.log(`[Job ${jobId}] RunPod finalizou com sucesso!`);
-        } else {
-            jobs.set(jobId, { status: 'error', error: 'Falha no RunPod: ' + JSON.stringify(result) });
-        }
-    }).catch(err => {
-        console.error(`[Job ${jobId}] Erro no RunPod:`, err.message);
-        jobs.set(jobId, { status: 'error', error: 'Erro ao contatar GPU na nuvem.' });
-    });
-
+  
+  if (jobs.has(jobId) && jobs.get(jobId).status === 'processing') {
     return res.json({ jobId, status: 'processing' });
   }
 
-  const pyProcess = spawn(pythonExecutable, [
-    processScript,
-    '--url', url,
-    '--pitch', String(pitch || 0),
-    '--jobId', jobId
-  ], {
-    cwd: pythonDir
-  });
+  jobs.set(jobId, { status: 'processing', progress: 0 });
 
-  let output = '';
+  const originalVocalsPath = path.join(pythonDir, 'jobs', jobId, 'original_vocals.wav');
+  const pitchedVocalsPath = path.join(pythonDir, 'jobs', jobId, `pitch_${numPitch}_vocals.wav`);
 
-  pyProcess.stdout.on('data', (data) => {
-    output += data.toString();
-    console.log(`[Job ${jobId}] Python:`, data.toString().trim());
-  });
+  const returnSuccess = (prefix: string) => {
+    jobs.set(jobId, { 
+      status: 'success', 
+      result: {
+        vocals: `/api/download/${jobId}/${prefix}_vocals.wav`,
+        drums: `/api/download/${jobId}/${prefix}_drums.wav`,
+        bass: `/api/download/${jobId}/${prefix}_bass.wav`,
+        other: `/api/download/${jobId}/${prefix}_other.wav`,
+        piano: `/api/download/${jobId}/${prefix}_piano.wav`,
+        guitar: `/api/download/${jobId}/${prefix}_guitar.wav`
+      }
+    });
+  };
 
-  pyProcess.stderr.on('data', (data) => {
-    console.error(`[Job ${jobId}] Python Erro:`, data.toString().trim());
-  });
+  const runPitchStems = () => {
+    console.log(`[Job ${jobId}] Iniciando pitch_stems.py para pitch ${numPitch}...`);
+    const pyProcess = spawn(pythonExecutable, [
+      path.join(pythonDir, 'pitch_stems.py'),
+      '--jobId', jobId,
+      '--pitch', String(numPitch)
+    ], { cwd: pythonDir });
 
-  pyProcess.on('close', (code) => {
-    console.log(`[Job ${jobId}] Processo finalizado com código ${code}`);
-    if (code === 0) {
-      try {
-        // Tenta achar o json de sucesso no output
-        const lines = output.split('\n').map(l => l.trim()).filter(Boolean);
-        const lastLine = lines[lines.length - 1];
-        if (lastLine.startsWith('{')) {
-           const result = JSON.parse(lastLine);
-           jobs.set(jobId, { status: 'success', result });
+    let output = '';
+    pyProcess.stdout.on('data', data => output += data.toString());
+    pyProcess.stderr.on('data', data => console.error(`[Job ${jobId}] Pitch Erro:`, data.toString().trim()));
+
+    pyProcess.on('close', (code) => {
+      console.log(`[Job ${jobId}] pitch_stems.py finalizado com código ${code}`);
+      if (code === 0) {
+        returnSuccess(`pitch_${numPitch}`);
+      } else {
+        jobs.set(jobId, { status: 'error', error: 'Falha ao aplicar pitch nas faixas' });
+      }
+    });
+  };
+
+  const checkAndRun = () => {
+    if (fs.existsSync(originalVocalsPath)) {
+      console.log(`[Job ${jobId}] Cache encontrado! Stems originais já existem.`);
+      if (numPitch === 0) {
+        returnSuccess('original');
+      } else {
+        if (fs.existsSync(pitchedVocalsPath)) {
+          console.log(`[Job ${jobId}] Cache do pitch ${numPitch} também existe! Retornando...`);
+          returnSuccess(`pitch_${numPitch}`);
         } else {
-           jobs.set(jobId, { status: 'success', result: {
-             vocals: `/api/download/${jobId}/vocals.mp3`,
-             accompaniment: `/api/download/${jobId}/accompaniment.mp3`
-           }});
+          runPitchStems();
         }
-      } catch(e) {
-        jobs.set(jobId, { status: 'error', error: 'Falha ao ler output do python' });
       }
     } else {
-      jobs.set(jobId, { status: 'error', error: 'O processamento falhou no servidor' });
+      console.log(`[Job ${jobId}] Cache não encontrado. Iniciando Demucs (process.py)...`);
+      const pyProcess = spawn(pythonExecutable, [
+        path.join(pythonDir, 'process.py'),
+        '--url', url,
+        '--pitch', '0',
+        '--jobId', jobId
+      ], { cwd: pythonDir });
+
+      let output = '';
+      pyProcess.stdout.on('data', data => {
+        output += data.toString();
+        console.log(`[Job ${jobId}] Demucs:`, data.toString().trim());
+      });
+      pyProcess.stderr.on('data', data => console.error(`[Job ${jobId}] Demucs Erro:`, data.toString().trim()));
+
+      pyProcess.on('close', (code) => {
+        console.log(`[Job ${jobId}] process.py finalizado com código ${code}`);
+        if (code === 0) {
+          if (numPitch === 0) {
+            returnSuccess('original');
+          } else {
+            runPitchStems();
+          }
+        } else {
+          jobs.set(jobId, { status: 'error', error: 'Falha ao processar vídeo ou IA' });
+        }
+      });
     }
-  });
+  };
+
+  checkAndRun();
 
   return res.json({ jobId, status: 'processing' });
 });

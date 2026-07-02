@@ -23,11 +23,8 @@ def main():
     os.makedirs(job_dir, exist_ok=True)
     
     try:
-        # 1. Download
         raw_audio_path = os.path.join(job_dir, "raw.wav")
-        ffmpeg_path = r"C:\Users\William\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.2-full_build\bin\ffmpeg.exe"
-        if not os.path.exists(ffmpeg_path):
-            ffmpeg_path = "ffmpeg"
+        ffmpeg_path = r"C:\Users\DAVID\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.2-full_build\bin"
 
         ydl_opts = {
             'format': 'bestaudio/best',
@@ -42,43 +39,35 @@ def main():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([args.url])
             
-        pitch_shifted_path = os.path.join(job_dir, "pitch_shifted.wav")
-        audio_data, sample_rate = sf.read(raw_audio_path)
-        
-        if args.pitch != 0:
-            board = Pedalboard([PitchShift(semitones=args.pitch)])
-            effected = board(audio_data, sample_rate)
-            sf.write(pitch_shifted_path, effected, sample_rate)
-        else:
-            sf.write(pitch_shifted_path, audio_data, sample_rate)
-
-        # 3. Stem Separation (Demucs)
-        # --two-stems=vocals cria "vocals" e "no_vocals"
+        # No pitch shifting in this step, Demucs runs on raw audio
         subprocess.run([
             sys.executable, "-m", "demucs.separate",
-            "--two-stems=vocals",
-            "-n", "htdemucs",
+            "-n", "htdemucs_6s",
             "-o", job_dir,
-            pitch_shifted_path
+            raw_audio_path
         ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
         # Demucs output folder
-        demucs_out = os.path.join(job_dir, "htdemucs", "pitch_shifted")
+        demucs_out = os.path.join(job_dir, "htdemucs_6s", "raw")
         
-        # Move back to job_dir
-        shutil.move(os.path.join(demucs_out, "vocals.wav"), os.path.join(job_dir, "vocals.wav"))
-        shutil.move(os.path.join(demucs_out, "no_vocals.wav"), os.path.join(job_dir, "accompaniment.wav"))
+        # Move back to job_dir with 'original_' prefix
+        stems = ["vocals", "drums", "bass", "other", "piano", "guitar"]
+        for stem in stems:
+            shutil.move(os.path.join(demucs_out, f"{stem}.wav"), os.path.join(job_dir, f"original_{stem}.wav"))
         
         # Cleanup
         os.remove(raw_audio_path)
-        os.remove(pitch_shifted_path)
-        shutil.rmtree(os.path.join(job_dir, "htdemucs"))
+        shutil.rmtree(os.path.join(job_dir, "htdemucs_6s"))
         
         print(json.dumps({
             "status": "success",
             "jobId": args.jobId,
-            "vocals": f"{args.jobId}/vocals.wav",
-            "accompaniment": f"{args.jobId}/accompaniment.wav"
+            "vocals": f"/api/download/{args.jobId}/original_vocals.wav",
+            "drums": f"/api/download/{args.jobId}/original_drums.wav",
+            "bass": f"/api/download/{args.jobId}/original_bass.wav",
+            "other": f"/api/download/{args.jobId}/original_other.wav",
+            "piano": f"/api/download/{args.jobId}/original_piano.wav",
+            "guitar": f"/api/download/{args.jobId}/original_guitar.wav"
         }))
     except Exception as e:
         print(json.dumps({

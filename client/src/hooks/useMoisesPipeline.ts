@@ -13,7 +13,7 @@ export const useMoisesPipeline = () => {
     try {
       setJobStatus('processing');
       setError(null);
-      setStems(null, null);
+      setStems(null);
 
       const API_URL = import.meta.env.VITE_API_URL || '/api';
       const response = await fetch(`${API_URL}/process`, {
@@ -46,10 +46,14 @@ export const useMoisesPipeline = () => {
           setJobStatus('success');
           // A API retorna URLs relativas, precisamos montar a URL completa se o VITE_API_URL estiver apontando pra fora
           const baseUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api/audio', '') : '';
-          setStems(
-            baseUrl + data.result.vocals,
-            baseUrl + data.result.accompaniment
-          );
+          setStems({
+            vocals: baseUrl + data.result.vocals,
+            drums: baseUrl + data.result.drums,
+            bass: baseUrl + data.result.bass,
+            other: baseUrl + data.result.other,
+            piano: baseUrl + data.result.piano,
+            guitar: baseUrl + data.result.guitar
+          });
         } else if (data.status === 'error') {
           clearInterval(interval);
           setJobStatus('error');

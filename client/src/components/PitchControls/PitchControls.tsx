@@ -1,8 +1,9 @@
 import React from 'react';
-import { MdAdd, MdRemove, MdRefresh } from 'react-icons/md';
+import { MdAdd, MdRemove, MdRefresh, MdPlayArrow } from 'react-icons/md';
 import { PitchGrid } from './PitchGrid';
 import { Button } from '../ui/Button';
 import { usePlayerStore } from '../../store/playerStore';
+import { useMoisesPipeline } from '../../hooks/useMoisesPipeline';
 
 function formatPitch(value: number): string {
   if (value > 0) return `+${value}`;
@@ -23,7 +24,8 @@ function getPitchTextColor(value: number): string {
 }
 
 export const PitchControls: React.FC = () => {
-  const { pitch, incrementPitch, decrementPitch, resetPitch } = usePlayerStore();
+  const { pitch, incrementPitch, decrementPitch, resetPitch, jobStatus, videoUrl } = usePlayerStore();
+  const { startPipeline } = useMoisesPipeline();
 
   return (
     <div className="w-full max-w-3xl mx-auto flex flex-col gap-6">
@@ -82,6 +84,20 @@ export const PitchControls: React.FC = () => {
           >
             <MdAdd />
           </button>
+        </div>
+
+        {/* Botão Aplicar Tom */}
+        <div className="z-10 mt-2">
+          <Button
+            variant="primary"
+            size="md"
+            onClick={startPipeline}
+            disabled={!videoUrl.trim() || jobStatus === 'processing'}
+            className="flex items-center gap-2 px-8"
+          >
+            <MdPlayArrow className="text-lg" />
+            {jobStatus === 'processing' ? 'Processando IA...' : 'Aplicar Tom (Re-processar)'}
+          </Button>
         </div>
       </div>
 

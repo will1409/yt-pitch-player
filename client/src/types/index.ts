@@ -11,9 +11,17 @@ export interface PlayerState {
   jobId: string | null;
   jobStatus: 'idle' | 'processing' | 'success' | 'error';
   vocalsUrl: string | null;
-  accompanimentUrl: string | null;
+  drumsUrl: string | null;
+  bassUrl: string | null;
+  otherUrl: string | null;
+  pianoUrl: string | null;
+  guitarUrl: string | null;
   vocalsVolume: number;
-  accompanimentVolume: number;
+  drumsVolume: number;
+  bassVolume: number;
+  otherVolume: number;
+  pianoVolume: number;
+  guitarVolume: number;
   
   error: string | null;
 }
@@ -28,9 +36,13 @@ export interface PlayerActions {
   
   setJobId: (id: string | null) => void;
   setJobStatus: (status: 'idle' | 'processing' | 'success' | 'error') => void;
-  setStems: (vocals: string | null, accompaniment: string | null) => void;
+  setStems: (stems: { vocals: string | null, drums: string | null, bass: string | null, other: string | null, piano: string | null, guitar: string | null } | null) => void;
   setVocalsVolume: (vol: number) => void;
-  setAccompanimentVolume: (vol: number) => void;
+  setDrumsVolume: (vol: number) => void;
+  setBassVolume: (vol: number) => void;
+  setOtherVolume: (vol: number) => void;
+  setPianoVolume: (vol: number) => void;
+  setGuitarVolume: (vol: number) => void;
   
   setError: (error: string | null) => void;
 }
